@@ -30,17 +30,38 @@ const NodeEditor: React.FC<NodeEditorProps> = ({ selectedNode, onUpdateNode }) =
     }
   };
 
-  const handleSave = () => {
+  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
     if (node) {
-      fetch(`http://127.0.0.1:8000/api/nodes/${node.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(node),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          onUpdateNode(data.updated_node); // Reflect changes in parent component
+      setIsSaving(true);
+      setSaveStatus('Saving...');
+      try {
+        const response = await fetch(`http://127.0.0.1:8001/api/nodes/${node.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(node),
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+          onUpdateNode(node); // Reflect changes in parent component
+          setSaveStatus('Changes saved successfully!');
+          setTimeout(() => setSaveStatus(''), 3000);
+        } else {
+          throw new Error(data.error || 'Failed to save changes');
+        }
+      } catch (error) {
+        console.error('Error saving node:', error);
+        setSaveStatus('Error saving changes. Please try again.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -90,7 +111,32 @@ const NodeEditor: React.FC<NodeEditorProps> = ({ selectedNode, onUpdateNode }) =
         </div>
       ))}
 
-      <button onClick={handleSave}>Save Changes</button>
+      <button 
+        onClick={handleSave}
+        disabled={isSaving}
+        style={{
+          padding: '8px 16px',
+          backgroundColor: isSaving ? '#ccc' : '#4CAF50',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: isSaving ? 'not-allowed' : 'pointer',
+          marginRight: '10px'
+        }}
+      >
+        {isSaving ? 'Saving...' : 'Save Changes'}
+      </button>
+      {saveStatus && (
+        <span style={{
+          marginLeft: '10px',
+          padding: '8px',
+          backgroundColor: saveStatus.includes('Error') ? '#ffebee' : '#e8f5e9',
+          borderRadius: '4px',
+          color: saveStatus.includes('Error') ? '#c62828' : '#2e7d32'
+        }}>
+          {saveStatus}
+        </span>
+      )}
     </div>
   );
 };

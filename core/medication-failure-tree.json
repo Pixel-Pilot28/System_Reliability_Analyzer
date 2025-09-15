@@ -12,7 +12,7 @@
       "label": "Physician Patient Assessment",
       "errorRate": 0.05,
       "reference": {
-        "citation": "Kostopoulou, O., Delaney, B. C., & Munro, C. W. (2008). Diagnostic difficulty and error in primary care—a systematic review. Family practice, 25(6), 400-413.",
+        "citation": "Kostopoulou, O., Delaney, B. C., & Munro, C. W. (2008). Diagnostic difficulty and error in primary care\u00e2\u20ac\u201da systematic review. Family practice, 25(6), 400-413.",
         "doi": "10.1093/fampra/cmn071",
         "error_rate_context": "5% rate of diagnostic errors in primary care settings"
       },
@@ -27,7 +27,11 @@
           "value": "0.3",
           "description": "Based on number of comorbidities"
         }
-      ]
+      ],
+      "position": {
+        "x": 541.0435267857143,
+        "y": 671.7912946428572
+      }
     },
     {
       "id": "ehr-entry",
@@ -47,10 +51,14 @@
         },
         {
           "name": "alert_fatigue",
-          "value": "0.4",
+          "value": "0.48",
           "description": "Based on alert override rate"
         }
-      ]
+      ],
+      "position": {
+        "x": 271.2303775686245,
+        "y": 622.7046165289573
+      }
     },
     {
       "id": "pharmacist-verification",
@@ -73,7 +81,11 @@
           "value": "0.4",
           "description": "Based on number of medications being checked"
         }
-      ]
+      ],
+      "position": {
+        "x": 126.561465757826,
+        "y": 434.73977949356015
+      }
     },
     {
       "id": "automated-dispensing",
@@ -96,7 +108,11 @@
           "value": "0.98",
           "description": "Accuracy of stock levels"
         }
-      ]
+      ],
+      "position": {
+        "x": 137.13235321832815,
+        "y": 531.2883108881363
+      }
     },
     {
       "id": "nurse-verification",
@@ -116,10 +132,14 @@
         },
         {
           "name": "shift_duration",
-          "value": "0.3",
+          "value": "0.34",
           "description": "Hours worked in current shift"
         }
-      ]
+      ],
+      "position": {
+        "x": 288.1345720904236,
+        "y": 280.459571441962
+      }
     },
     {
       "id": "patient-identification",
@@ -142,7 +162,11 @@
           "value": "0.9",
           "description": "Patient ability to communicate"
         }
-      ]
+      ],
+      "position": {
+        "x": 678.5337244018838,
+        "y": 388.5483868422292
+      }
     },
     {
       "id": "medication-administration",
@@ -165,7 +189,11 @@
           "value": "0.5",
           "description": "Based on medication schedule adherence"
         }
-      ]
+      ],
+      "position": {
+        "x": 715.813781220958,
+        "y": 510.733137799058
+      }
     },
     {
       "id": "environmental-conditions",
@@ -193,7 +221,26 @@
           "value": "0.8",
           "description": "Cleanliness and organization of work area"
         }
-      ]
+      ],
+      "position": {
+        "x": 434.882697846939,
+        "y": 494.633431100471
+      }
+    },
+    {
+      "id": "dndnode_0",
+      "type": "input",
+      "position": {
+        "x": 539.2620650960088,
+        "y": 214.22023967942758
+      },
+      "data": {
+        "label": "Input Node",
+        "errorRate": 0,
+        "variables": []
+      },
+      "label": "records request",
+      "errorRate": 1.23
     }
   ],
   "connections": [
@@ -266,6 +313,62 @@
       "type": "environmental",
       "error_propagation_factor": 1.25,
       "description": "Environmental conditions impact administration accuracy"
+    },
+    {
+      "source": "dndnode_0",
+      "sourceHandle": null,
+      "target": "patient-identification",
+      "targetHandle": null,
+      "id": "edndnode_0-patient-identification"
+    },
+    {
+      "source": "dndnode_0",
+      "sourceHandle": null,
+      "target": "nurse-verification",
+      "targetHandle": null,
+      "id": "edndnode_0-nurse-verification"
+    },
+    {
+      "source": "dndnode_0",
+      "sourceHandle": null,
+      "target": "nurse-verification",
+      "targetHandle": null,
+      "id": "edndnode_0-nurse-verification"
+    },
+    {
+      "source": "automated-dispensing",
+      "sourceHandle": null,
+      "target": "pharmacist-verification",
+      "targetHandle": null,
+      "id": "eautomated-dispensing-pharmacist-verification"
+    },
+    {
+      "source": "pharmacist-verification",
+      "sourceHandle": null,
+      "target": "automated-dispensing",
+      "targetHandle": null,
+      "id": "epharmacist-verification-automated-dispensing"
+    },
+    {
+      "source": "automated-dispensing",
+      "sourceHandle": null,
+      "target": "ehr-entry",
+      "targetHandle": null,
+      "id": "eautomated-dispensing-ehr-entry"
+    },
+    {
+      "source": "nurse-verification",
+      "sourceHandle": null,
+      "target": "pharmacist-verification",
+      "targetHandle": null,
+      "id": "enurse-verification-pharmacist-verification"
+    },
+    {
+      "source": "dndnode_0",
+      "sourceHandle": null,
+      "target": "nurse-verification",
+      "targetHandle": null,
+      "id": "edndnode_0-nurse-verification"
     }
   ]
 }

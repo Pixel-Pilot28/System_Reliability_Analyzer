@@ -1,19 +1,26 @@
-from fastapi import FastAPI
+import sys
+import os
+# Add the project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+import json
+from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from fastapi import FastAPI
+from typing import Dict
+
+# Local imports
+from core.routes import probabilistic, edges
 import live_data
-import json
-import os
-
-
 
 # Global variables
 nodes = []
 connections = []
-file_path = (r"C:\Users\JVanD\Programs_Code\Process_Gap\core\medication-failure-tree.json")
-assert os.path.exists(file_path), "JSON file path is invalid!"
+file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "medication-failure-tree.json"))
+print(f"Looking for JSON file at: {file_path}")  # Debug print
+assert os.path.exists(file_path), f"JSON file path is invalid! Path: {file_path}"
 
 async def lifespan(app: FastAPI):
     """Lifespan function to manage startup and shutdown events."""
@@ -24,11 +31,24 @@ def load_initial_data():
     """Load initial data from the JSON file and debug with number of nodes and connections."""
     global nodes, connections
     if os.path.exists(file_path):
-        with open(file_path, "r") as file:
+        with open(file_path, "r+") as file:
             data = json.load(file)
-        nodes[:] = data.get("nodes", [])
-        connections[:] = data.get("connections", [])
-        print(f"Loaded {len(nodes)} nodes and {len(connections)} connections.")
+            # Ensure all nodes have positions
+            for i, node in enumerate(data["nodes"]):
+                if "position" not in node:
+                    node["position"] = {
+                        "x": 100 + (i % 3) * 300,  # Grid layout: 3 columns
+                        "y": 100 + (i // 3) * 200   # 200px vertical spacing
+                    }
+            # Write back the updated data with positions
+            file.seek(0)
+            json.dump(data, file, indent=2)
+            file.truncate()
+            
+            nodes[:] = data.get("nodes", [])
+            connections[:] = data.get("connections", [])
+            print(f"Loaded {len(nodes)} nodes and {len(connections)} connections.")
+            print("Node positions:", [(node["id"], node["position"]) for node in nodes])
     else:
         print(f"File not found: {file_path}")
         nodes.clear()
@@ -45,15 +65,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="C:/Users/JVanD/Programs_Code/Process_Gap/core/ui/process-gap-ui/build/static"), name="static")
+static_files_path = os.path.join(os.path.dirname(__file__), "ui/process-gap-ui/build/static")
+index_html_path = os.path.join(os.path.dirname(__file__), "ui/process-gap-ui/build/index.html")
+
+app.mount("/static", StaticFiles(directory=static_files_path), name="static")
+
+app.include_router(probabilistic.router, prefix="/api")
+app.include_router(edges.router, prefix="/api")
 
 @app.get("/")
 async def serve_ui():
-    return FileResponse("C:/Users/JVanD/Programs_Code/Process_Gap/core/ui/process-gap-ui/build/index.html")
+    return FileResponse(index_html_path)
 
 @app.get("/api/failure-tree")
 async def get_failure_tree():
     return {"nodes": nodes, "connections": connections}
+
+@app.post("/api/nodes")
+async def create_node(node_data: Dict = Body(...)):
+    """Create a new node"""
+    global nodes
+    try:
+        # Add the node to the in-memory list
+        nodes.append(node_data)
+
+        # Update the file
+        with open(file_path, "r+") as file:
+            data = json.load(file)
+            data["nodes"].append(node_data)
+            file.seek(0)
+            json.dump(data, file, indent=2)
+            file.truncate()
+
+        return {"success": True, "node": node_data}
+    except Exception as e:
+        print(f"Error creating node: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 @app.get("/api/nodes")
 async def get_nodes():
@@ -69,152 +116,84 @@ async def get_connections():
 def get_live_feed():
     return live_data.generate_live_data()
 
+from fastapi import Body
+from typing import Dict
 
+@app.post("/api/nodes/{node_id}")
+async def update_node(node_id: str, node_data: Dict = Body(...)):
+    """Update node data and persist to file"""
+    global nodes
+    try:
+        # Update node in memory first
+        node_found = False
+        for node in nodes:
+            if node["id"] == node_id:
+                node.update(node_data)
+                node_found = True
+                break
 
-# from fastapi import FastAPI
-# from fastapi.middleware.cors import CORSMiddleware
-# from fastapi.staticfiles import StaticFiles
-# from fastapi.responses import FileResponse
-# from starlette.responses import RedirectResponse
-# import json
-# import os
+        if not node_found:
+            return {"success": False, "error": f"Node {node_id} not found"}
 
-# # Global variables
-# nodes = []
-# connections = []
-# file_path =(r"C:\Users\JVanD\Programs_Code\Process_Gap\core\medication-failure-tree.json")
+        # Update the file
+        with open(file_path, "r+") as file:
+            data = json.load(file)
+            for node in data["nodes"]:
+                if node["id"] == node_id:
+                    node.update(node_data)
+                    break
+            file.seek(0)
+            json.dump(data, file, indent=2)
+            file.truncate()
 
-# async def lifespan(app: FastAPI):
-#     """Lifespan function to manage startup and shutdown events."""
-#     # Startup logic
-#     load_initial_data()
-#     yield  # Yield control back to the application
-#     # Shutdown logic (if needed)
-#     # Example: Close database connections
+        return {"success": True, "node": node_data}
+    except Exception as e:
+        print(f"Error updating node: {str(e)}")
+        return {"success": False, "error": str(e)}
 
-# def load_initial_data():
-#     """Load initial data from the JSON file."""
-#     global nodes, connections
-#     if os.path.exists(file_path):
-#         with open(file_path, "r") as file:
-#             data = json.load(file)
-#         nodes[:] = data.get("nodes", [])
-#         connections[:] = data.get("connections", [])
-#     else:
-#         nodes.clear()
-#         connections.clear()
+@app.post("/api/nodes/{node_id}/position")
+async def update_node_position(node_id: str, position: Dict[str, float] = Body(...)):
+    """Update node position and persist to file"""
+    global nodes
+    
+    try:
+        # Validate position data
+        if not all(k in position for k in ['x', 'y']):
+            return {"success": False, "error": "Invalid position data"}
 
-# # Initialize FastAPI app with the lifespan function
-# app = FastAPI(lifespan=lifespan)
+        # Update node data in memory
+        node_found = False
+        updated_node = None
+        for node in nodes:
+            if node["id"] == node_id:
+                node["position"] = {
+                    "x": float(position["x"]),
+                    "y": float(position["y"])
+                }
+                node_found = True
+                updated_node = node
+                break
 
-# # Enable CORS for frontend communication
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],  # Replace with frontend URL in production
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+        if not node_found:
+            return {"success": False, "error": f"Node {node_id} not found"}
 
-# # Serve static files from the React build folder
-# app.mount("/static", StaticFiles(directory="ui/process-gap-ui/build/static"), name="static")
+        # Update the file
+        with open(file_path, "r+") as file:
+            data = json.load(file)
+            for node in data["nodes"]:
+                if node["id"] == node_id:
+                    node["position"] = position
+                    break
+            file.seek(0)
+            json.dump(data, file, indent=2)
+            file.truncate()
+            print(f"Saved position for node {node_id}: {position}")
 
-# @app.get("/")
-# async def serve_ui():
-#     return FileResponse("ui/process-gap-ui/build/index.html")
+        return {"success": True, "position": position}
+    except Exception as e:
+        print(f"Error updating node position: {str(e)}")
+        return {"success": False, "error": str(e)}
 
-# @app.on_event("startup")
-# def on_startup():
-#     load_initial_data()
-
-# @app.get("/api/failure-tree")
-# def get_failure_tree():
-#     """Get the failure tree data."""
-#     return {"nodes": nodes, "connections": connections}
-
-# @app.post("/api/nodes/{node_id}")
-# def update_node(node_id: str, updated_node: dict):
-#     """Update a specific node."""
-#     for node in nodes:
-#         if node["id"] == node_id:
-#             node.update(updated_node)
-#             return {"success": True, "updated_node": node}
-#     raise HTTPException(status_code=404, detail="Node not found")
-
-# @app.post("/api/save")
-# def save_changes():
-#     """Save changes to the JSON file."""
-#     with open(file_path, "w") as file:
-#         json.dump({"nodes": nodes, "connections": connections}, file, indent=4)
-#     return {"success": True, "message": "Changes saved successfully"}
-
-# # Mount the static directory
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-# app.mount("/ui", StaticFiles(directory="ui"), name="ui")
-
-# # Favicon route
-# @app.get("/favicon.ico")
-# async def favicon():
-#     return RedirectResponse(url="/static/favicon.ico")
-
-# @app.get("/")
-# async def serve_ui():
-#     return FileResponse("ui/dashboard.tsx")
-
-# @app.get("/")
-# async def serve_ui():
-#     return FileResponse("core/ui/build/index.html")
-
-# @app.get("/api/nodes")
-# def get_nodes():
-#     """Get all nodes."""
-#     return {"nodes": nodes}
-
-# @app.get("/api/connections")
-# def get_connections():
-#     """Get all connections."""
-#     return {"connections": connections}
-
-# @app.post("/api/nodes/{node_id}")
-# def update_node(node_id: str, node_data: dict):
-#     """Update a specific node."""
-#     for node in nodes:
-#         if node["id"] == node_id:
-#             node.update(node_data)
-#             break
-#     return {"success": True, "updated_node": node_data}
-
-# @app.get("/api/system-error")
-# def calculate_system_error():
-#     """Calculate the overall system error rate."""
-#     if not nodes:
-#         return {"system_error_rate": 0.0}
-
-#     total_error = 0
-#     for node in nodes:
-#         connected_nodes = [
-#             conn for conn in connections if conn["source"] == node["id"] or conn["target"] == node["id"]
-#         ]
-#         connection_factor = max(0.1, len(connected_nodes) * 0.2)
-#         total_error += node["errorRate"] * connection_factor
-
-#     system_error = total_error / len(nodes)
-#     return {"system_error_rate": system_error}
-
-# @app.get("/api/risk-report")
-# def generate_risk_report():
-#     """Generate a risk report based on current nodes."""
-#     vulnerabilities = [
-#         {
-#             "id": node["id"],
-#             "type": node["type"],
-#             "probability": node["errorRate"],
-#             "description": node["label"],
-#         }
-#         for node in nodes
-#     ]
-#     return {"vulnerabilities": vulnerabilities}
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run(app, host="127.0.0.1", port=8000)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8001)

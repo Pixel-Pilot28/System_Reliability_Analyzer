@@ -12,10 +12,16 @@ interface Variable {
   value: string | number;
 }
 
+interface Position {
+  x: number;
+  y: number;
+}
+
 interface CustomNodeData {
   id: string;
   label: string;
   errorRate: number;
+  position?: Position;
   variables?: Variable[];
 }
 
@@ -35,35 +41,49 @@ const App: React.FC = () => {
   const [edges, setEdges] = useState<CustomEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<CustomNodeData | null>(null);
 
-  // Fetch failure tree data on component mount
+  // Fetch failure tree data on component mount or when tab changes to dataView
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/failure-tree")
-      .then((response) => response.json())
-      .then((data) => {
-        setNodes(data.nodes);
-        setEdges(
-          data.connections.map((conn: any) => ({
-            id: `${conn.source}-${conn.target}`,
-            source: conn.source,
-            target: conn.target,
-            label: `Factor: ${conn.error_propagation_factor}`,
-            error_propagation_factor: conn.error_propagation_factor, // Map this property
-          }))
-        );
-      })
-      .catch((error) => {
-        console.error("Failed to fetch failure tree data:", error);
-      });
-  }, []);
+    if (currentTab === "dataView") {
+      fetch("http://127.0.0.1:8001/api/failure-tree")
+        .then((response) => response.json())
+        .then((data) => {
+          console.log("Received data:", data); // Debug log
+          setNodes(data.nodes);
+          setEdges(
+            data.connections.map((conn: any) => ({
+              id: `${conn.source}-${conn.target}`,
+              source: conn.source,
+              target: conn.target,
+              label: `Factor: ${conn.error_propagation_factor}`,
+              error_propagation_factor: conn.error_propagation_factor,
+            }))
+          );
+        })
+        .catch((error) => {
+          console.error("Failed to fetch failure tree data:", error);
+        });
+    }
+  }, [currentTab]);
 
-  const reactFlowNodes: Node[] = nodes.map((node) => ({
-    id: node.id,
-    position: { x: Math.random() * 400, y: Math.random() * 400 },
-    data: {
-      label: node.label,
-      errorRate: node.errorRate,
-    },
-  }));
+  const reactFlowNodes: Node[] = nodes.map((node) => {
+    // Use stored position or generate a stable position based on node ID
+    const hash = node.id.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+    const defaultPosition = {
+      x: (Math.abs(hash) % 800) + 100, // Between 100 and 900
+      y: (Math.abs(hash >> 8) % 600) + 100 // Between 100 and 700
+    };
+
+    return {
+      id: node.id,
+      position: node.position || defaultPosition,
+      data: {
+        label: node.label,
+        errorRate: node.errorRate,
+        variables: node.variables || [],
+      },
+      type: 'default',
+    };
+  });
 
   // Map CustomEdge to React Flow Edge
   const reactFlowEdges: Edge[] = edges.map((edge) => ({
@@ -80,7 +100,7 @@ const App: React.FC = () => {
 
   // Save node edits
   const saveNodeEdit = (updatedNode: CustomNodeData) => {
-    fetch(`http://127.0.0.1:8000/api/nodes/${updatedNode.id}`, {
+    fetch(`http://127.0.0.1:8001/api/nodes/${updatedNode.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updatedNode),
